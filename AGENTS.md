@@ -28,3 +28,6 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project architecture
+- Build DecisionDeck with the existing TanStack Start framework, not Next.js, because Lovable's supported project framework is fixed; keep PostgreSQL persistence on Lovable Cloud/Supabase for the approved implementation.
