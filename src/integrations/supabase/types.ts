@@ -213,6 +213,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_decision_bundle: {
+        Args: {
+          p_context: string
+          p_creation_method: string
+          p_decision_date: string
+          p_decision_text: string
+          p_links: Json
+          p_owner_name: string
+          p_rationale: string
+          p_source_notes: string
+          p_status: string
+          p_tag_names: string[]
+          p_title: string
+        }
+        Returns: string
+      }
       save_decision_bundle: {
         Args: {
           p_context: string
