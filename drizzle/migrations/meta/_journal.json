@@ -8,6 +8,13 @@
       "when": 1794108462185,
       "tag": "0000_decisiondeck_stage1_data",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794194852530,
+      "tag": "0001_create_decision_bundle_insert_rpc",
+      "breakpoints": true
     }
   ]
 }
