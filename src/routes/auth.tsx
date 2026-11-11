@@ -82,7 +82,8 @@ function AuthPage() {
   </Button>
   {mode === "login" && (
     <Button type="button" variant="outline" className="flex-1" onClick={() => {
-      localStorage.setItem("demoUser", "true");
+      localStorage.setItem("demo_mode", "true");
+      localStorage.setItem("user", JSON.stringify({ email: "demo@decisiondeck.local" }));
       void navigate({ to: "/", replace: true });
     }} disabled={busy}>
       Demo Login
