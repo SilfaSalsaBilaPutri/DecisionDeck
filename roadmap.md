@@ -1,6 +1,6 @@
 # DecisionDeck roadmap
 
 - [x] Confirm the supported Lovable stack and adapt `coldstart.md` with the approved decision.
-- [ ] Enable Lovable Cloud and establish the Stage 1 data/auth foundation.
-- [ ] Implement the Stage 1 user flows from the specification, beginning with the DecisionDeck home page at `/` (TanStack Start entry; no `App.tsx`).
-- [ ] Verify the primary flows, mobile layout, and project checks; update `coldstart.md` and this roadmap.
+- [x] Enable Lovable Cloud and establish the Stage 1 data/auth foundation (Supabase Auth & PostgreSQL schema).
+- [x] Implement the Stage 1 user flows from the specification (DecisionDeck home page at `/`, CRUD, AI summarizer, search & filters, external links, and demo mode).
+- [x] Verify the primary flows, mobile layout, test suite, and production build checks; update `coldstart.md` and this roadmap.
