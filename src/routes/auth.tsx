@@ -76,7 +76,19 @@ function AuthPage() {
             <div className="space-y-2"><Label htmlFor="password">Kata sandi</Label><Input id="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} required minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} /></div>
             {message ? <p role="status" className="text-sm leading-6 text-primary">{message}</p> : null}
             {errorMessage ? <p role="alert" className="text-sm leading-6 text-destructive">{errorMessage}</p> : null}
-            <Button type="submit" className="w-full" disabled={busy}>{busy ? "Memproses…" : mode === "login" ? "Masuk" : "Buat akun"}</Button>
+            <div className="flex space-x-2">
+  <Button type="submit" className="flex-1" disabled={busy}>
+    {busy ? "Memproses…" : mode === "login" ? "Masuk" : "Buat akun"}
+  </Button>
+  {mode === "login" && (
+    <Button type="button" variant="outline" className="flex-1" onClick={() => {
+      localStorage.setItem("demoUser", "true");
+      void navigate({ to: "/", replace: true });
+    }} disabled={busy}>
+      Demo Login
+    </Button>
+  )}
+</div>
           </form>
           <p className="mt-6 text-center text-xs leading-5 text-muted-foreground">Dengan {mode === "signup" ? "membuat akun" : "masuk"}, Anda menggunakan ruang catatan pribadi.</p>
         </section>

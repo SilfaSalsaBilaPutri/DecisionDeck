@@ -78,7 +78,7 @@ export const saveDecision = createServerFn({ method: "POST" })
     });
 
     const { error } = await context.supabase.rpc("save_decision_bundle", {
-      p_decision_id: data.id,
+      p_decision_id: data.id ?? "",
       p_title: data.title.trim(),
       p_context: data.context,
       p_decision_text: data.decision_text,
@@ -87,7 +87,7 @@ export const saveDecision = createServerFn({ method: "POST" })
       p_decision_date: data.decision_date,
       p_status: data.status,
       p_creation_method: "manual",
-      p_source_notes: null,
+      p_source_notes: "",
       p_tag_names: cleanTags,
       p_links: cleanLinks as Json,
     });
