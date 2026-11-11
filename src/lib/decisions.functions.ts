@@ -17,6 +17,8 @@ type SaveDecisionInput = {
   status: "proposed" | "decided" | "superseded";
   tags: string[];
   links: DecisionLinkInput[];
+  source_notes?: string;
+  creation_method?: "manual" | "ai_summarized";
 };
 
 export const listDecisions = createServerFn({ method: "GET" })
@@ -86,8 +88,8 @@ export const saveDecision = createServerFn({ method: "POST" })
       p_owner_name: data.owner_name.trim(),
       p_decision_date: data.decision_date,
       p_status: data.status,
-      p_creation_method: "manual",
-      p_source_notes: "",
+      p_creation_method: data.creation_method ?? "manual",
+      p_source_notes: data.source_notes ?? "",
       p_tag_names: cleanTags,
       p_links: cleanLinks as Json,
     });
