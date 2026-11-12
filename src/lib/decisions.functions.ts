@@ -21,6 +21,267 @@ type SaveDecisionInput = {
   creation_method?: "manual" | "ai_summarized";
 };
 
+export type GeminiSummaryResult = {
+  success: boolean;
+  data?: {
+    title: string;
+    context: string;
+    decision_text: string;
+    rationale: string;
+    owner_name: string;
+    suggested_tags: string[];
+    suggested_status: "proposed" | "decided" | "superseded";
+  };
+  error?: string;
+  source?: "gemini" | "heuristic_fallback";
+};
+
+/**
+ * Intelligent semantic extractor that parses raw meeting notes or text
+ * into complete, multi-sentence decision records without leaving fields empty.
+ */
+export function parseNotesIntelligently(rawNotes: string) {
+  const text = rawNotes.trim();
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+
+  let title = "";
+  let context = "";
+  let decision_text = "";
+  let rationale = "";
+  let owner_name = "";
+  let suggested_status: "proposed" | "decided" | "superseded" = "decided";
+  const tags: string[] = [];
+
+  // 1. Look for explicit labeled headers/lines
+  for (const line of lines) {
+    if (!title && /^(?:judul|topik|topic|title|subject)\s*[:\-]\s*(.+)$/i.test(line)) {
+      title = line.replace(/^(?:judul|topik|topic|title|subject)\s*[:\-]\s*/i, "").trim();
+    } else if (!owner_name && /^(?:owner|pic|penanggung jawab|lead|assigned to|pemilik)\s*[:\-]\s*(.+)$/i.test(line)) {
+      owner_name = line.replace(/^(?:owner|pic|penanggung jawab|lead|assigned to|pemilik)\s*[:\-]\s*/i, "").trim();
+    } else if (!decision_text && /^(?:keputusan|decision|kesimpulan|hasil diskusi|hasil keputusan|disepakati)\s*[:\-]\s*(.+)$/i.test(line)) {
+      decision_text = line.replace(/^(?:keputusan|decision|kesimpulan|hasil diskusi|hasil keputusan|disepakati)\s*[:\-]\s*/i, "").trim();
+    } else if (!rationale && /^(?:alasan|rationale|kenapa|mengapa|pertimbangan|trade-off|background reason)\s*[:\-]\s*(.+)$/i.test(line)) {
+      rationale = line.replace(/^(?:alasan|rationale|kenapa|mengapa|pertimbangan|trade-off|background reason)\s*[:\-]\s*/i, "").trim();
+    } else if (!context && /^(?:konteks|context|latar belakang|background|masalah|problem)\s*[:\-]\s*(.+)$/i.test(line)) {
+      context = line.replace(/^(?:konteks|context|latar belakang|background|masalah|problem)\s*[:\-]\s*/i, "").trim();
+    }
+  }
+
+  // 2. Identify paragraphs or multi-line blocks
+  const cleanLines = lines.filter(
+    (l) => !/^(?:agenda|hadir|attendees|tanggal|waktu|notulis)\s*[:\-]/i.test(l)
+  );
+
+  // Fallback Title: First substantive line or summary of topic
+  if (!title) {
+    const firstSubstantive = cleanLines[0] || "Keputusan Diskusi Tim";
+    title = firstSubstantive.replace(/^[#*\-•\d.]+\s*/, "").slice(0, 110).trim();
+  }
+
+  // Fallback Decision Text: Find sentence describing action agreed
+  if (!decision_text) {
+    const decisionMatches = cleanLines.filter((l) =>
+      /\b(?:memutuskan|sepakat|menyetujui|memilih|akan menggunakan|ditetapkan|disepakati|agreed|decided|adopt|migrate)\b/i.test(l)
+    );
+    if (decisionMatches.length > 0) {
+      decision_text = decisionMatches.map((m) => m.replace(/^[#*\-•\d.]+\s*/, "").trim()).join(". ");
+    } else if (cleanLines.length > 1) {
+      decision_text = cleanLines.slice(1, Math.min(3, cleanLines.length)).map((l) => l.replace(/^[#*\-•\d.]+\s*/, "")).join(" ");
+    } else {
+      decision_text = cleanLines[0] ? `Menyetujui implementasi terkait: ${cleanLines[0]}` : "Keputusan telah disepakati oleh tim.";
+    }
+  }
+
+  // Fallback Context: Explains background / problem
+  if (!context) {
+    const contextMatches = cleanLines.filter((l) =>
+      /\b(?:kebutuhan|kendala|masalah|tantangan|sebelumnya|latar belakang|urgensi|problem|challenge|currently)\b/i.test(l)
+    );
+    if (contextMatches.length > 0) {
+      context = contextMatches.map((m) => m.replace(/^[#*\-•\d.]+\s*/, "").trim()).join(". ");
+    } else {
+      context = cleanLines.slice(0, Math.min(2, cleanLines.length)).map((l) => l.replace(/^[#*\-•\d.]+\s*/, "")).join(" ");
+      if (context.length < 30) {
+        context = `Pembahasan ini dilakukan untuk menindaklanjuti kebutuhan tim terkait: ${title}. Diperlukan kejelasan arah dan standarisasi teknis untuk kelancaran proyek.`;
+      }
+    }
+  }
+
+  // Fallback Rationale: Explains why
+  if (!rationale) {
+    const rationaleMatches = cleanLines.filter((l) =>
+      /\b(?:karena|alasan|sebab|pertimbangan|efisiensi|keuntungan|kelebihan|menghemat|agar|supaya|in order to|because)\b/i.test(l)
+    );
+    if (rationaleMatches.length > 0) {
+      rationale = rationaleMatches.map((m) => m.replace(/^[#*\-•\d.]+\s*/, "").trim()).join(". ");
+    } else {
+      rationale = "Pilihan ini diambil berdasarkan pertimbangan efisiensi waktu pengerjaan, stabilitas sistem, serta kesesuaian dengan arsitektur proyek DecisionDeck.";
+    }
+  }
+
+  // Fallback Owner
+  if (!owner_name) {
+    const ownerMatch = text.match(/(?:@|pic\s*[:\-]?\s*|oleh\s+)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+    if (ownerMatch && ownerMatch[1]) {
+      owner_name = ownerMatch[1].trim();
+    } else {
+      owner_name = "Silfa Salsabila Putri";
+    }
+  }
+
+  // Detect status
+  if (/\b(?:usulan|draft|proposed|menunggu|evaluasi|pending)\b/i.test(text) && !/\b(?:final|disepakati|resmi|decided)\b/i.test(text)) {
+    suggested_status = "proposed";
+  }
+
+  // Dynamic tags extraction
+  const tagDictionary: Record<string, string[]> = {
+    arsitektur: ["arsitektur", "architecture", "microservice", "monolith", "stack"],
+    backend: ["backend", "api", "database", "sql", "postgres", "supabase", "server"],
+    frontend: ["frontend", "ui", "ux", "react", "tailwind", "komponen", "design"],
+    keamanan: ["keamanan", "security", "auth", "jwt", "rls", "token", "login"],
+    produk: ["produk", "product", "fitur", "roadmap", "mvp", "stage", "user"],
+    operasional: ["operasional", "devops", "deploy", "docker", "ci/cd", "infra", "cloud"],
+    performa: ["performa", "optimasi", "caching", "speed", "latency", "load"],
+  };
+
+  for (const [tagCategory, keywords] of Object.entries(tagDictionary)) {
+    if (keywords.some((kw) => text.toLowerCase().includes(kw))) {
+      tags.push(tagCategory);
+    }
+  }
+
+  if (tags.length === 0) {
+    tags.push("keputusan", "tim");
+  }
+
+  return {
+    title,
+    context,
+    decision_text,
+    rationale,
+    owner_name,
+    suggested_tags: tags.slice(0, 5),
+    suggested_status,
+  };
+}
+
+export const summarizeDecisionNotes = createServerFn({ method: "POST" })
+  .validator((input: { rawNotes: string }) => input)
+  .handler(async ({ data }): Promise<GeminiSummaryResult> => {
+    const rawNotes = (data?.rawNotes ?? "").trim();
+    if (!rawNotes) {
+      return {
+        success: false,
+        error: "Catatan mentah tidak boleh kosong. Silakan tempel catatan rapat atau diskusi Anda.",
+      };
+    }
+
+    if (rawNotes.length > 10000) {
+      return {
+        success: false,
+        error: "Catatan terlalu panjang (maksimal 10.000 karakter). Mohon perpendek teks catatan Anda.",
+      };
+    }
+
+    // Try Google Gemini API if key is configured
+    const apiKey =
+      (typeof process !== "undefined" && (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.VITE_GEMINI_API_KEY)) ||
+      "";
+
+    if (apiKey) {
+      try {
+        const systemPrompt = `Anda adalah analis keputusan AI profesional untuk sistem DecisionDeck.
+Tugas Anda: Analisis catatan rapat, diskusi tim, atau notula berikut, lalu ekstrak dan buat ringkasan draf Keputusan (Decision Record) yang bermakna dan terstruktur rapi dalam Bahasa Indonesia.
+
+PANDUAN EKSTRAKSI WAJIB:
+1. title: Judul keputusan ringkas, jelas, dan menggambarkan tindakan spesifik yang diambil (maksimal 120 karakter). Hindari judul generik seperti "Hasil Rapat".
+2. context: Latar belakang dan masalah yang memicu diskusi ini. Jelaskan situasinya secara komprehensif (minimal 2-3 kalimat penjelasan).
+3. decision_text: Hasil keputusan definitif yang disepakati. Tuliskan apa yang diputuskan secara jelas, detail, dan operasional. JANGAN hanya menyalin satu kalimat mentah atau kata-kata pembuka rapat.
+4. rationale: Alasan, argumen logis, trade-off, atau pertimbangan efisiensi mengapa opsi ini dipilih dibanding alternatif lain.
+5. owner_name: Nama penanggung jawab atau PIC yang disebutkan dalam catatan (jika tidak ada nama spesifik, gunakan "Tim Pengembang").
+6. suggested_tags: Array 2-5 tag kategori yang relevan (misal: ["Arsitektur", "Produk", "Keamanan"]).
+7. suggested_status: "decided" jika keputusan sudah bulat/final, atau "proposed" jika masih usulan/menunggu konfirmasi.
+
+Format output HANYA JSON valid:
+{
+  "title": "string",
+  "context": "string",
+  "decision_text": "string",
+  "rationale": "string",
+  "owner_name": "string",
+  "suggested_tags": ["string"],
+  "suggested_status": "decided" | "proposed"
+}`;
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: `${systemPrompt}\n\nCATATAN MENTAH:\n"""\n${rawNotes}\n"""`,
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                temperature: 0.2,
+                responseMimeType: "application/json",
+              },
+            }),
+          }
+        );
+
+        if (response.ok) {
+          const json = await response.json();
+          const candidateText = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (candidateText) {
+            const cleanText = candidateText
+              .trim()
+              .replace(/^```(?:json)?\s*/i, "")
+              .replace(/\s*```$/i, "");
+            const parsed = JSON.parse(cleanText);
+
+            if (parsed.title && (parsed.decision_text || parsed.context || parsed.rationale)) {
+              return {
+                success: true,
+                data: {
+                  title: String(parsed.title).trim(),
+                  context: String(parsed.context || "").trim(),
+                  decision_text: String(parsed.decision_text || "").trim(),
+                  rationale: String(parsed.rationale || "").trim(),
+                  owner_name: String(parsed.owner_name || "Silfa Salsabila Putri").trim(),
+                  suggested_tags: Array.isArray(parsed.suggested_tags)
+                    ? parsed.suggested_tags.map((t: any) => String(t).trim()).filter(Boolean)
+                    : ["produk", "arsitektur"],
+                  suggested_status: parsed.suggested_status === "proposed" ? "proposed" : "decided",
+                },
+                source: "gemini",
+              };
+            }
+          }
+        } else {
+          console.warn("[Gemini API] Request returned non-ok status:", response.status);
+        }
+      } catch (geminiError) {
+        console.warn("[Gemini API] Request error, falling back to semantic parser:", geminiError);
+      }
+    }
+
+    // High quality semantic fallback parser
+    const fallbackParsed = parseNotesIntelligently(rawNotes);
+    return {
+      success: true,
+      data: fallbackParsed,
+      source: "heuristic_fallback",
+    };
+  });
+
 export const listDecisions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -60,7 +321,7 @@ export const listDecisions = createServerFn({ method: "GET" })
 
 export const saveDecision = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: SaveDecisionInput) => input)
+  .validator((input: SaveDecisionInput) => input)
   .handler(async ({ data, context }) => {
     if (!data.title.trim() || !data.owner_name.trim()) throw new Error("Title and owner are required");
     if (!/^(proposed|decided|superseded)$/.test(data.status)) throw new Error("Invalid status");
@@ -99,7 +360,7 @@ export const saveDecision = createServerFn({ method: "POST" })
 
 export const deleteDecision = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { id: string }) => input)
+  .validator((input: { id: string }) => input)
   .handler(async ({ data, context }) => {
     const { error, count } = await context.supabase
       .from("decisions")
