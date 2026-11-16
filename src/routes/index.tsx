@@ -249,7 +249,7 @@ function parseNotesToDraft(rawNotes: string): Partial<DecisionForm> {
     }
   }
   if (!owner_name) {
-    owner_name = "Silfa Salsabila Putri";
+    owner_name = "Belum Ditentukan";
   }
 
   const tagKeywords = ["frontend", "backend", "arsitektur", "produk", "keamanan", "database", "api", "infra", "prioritas", "ui/ux", "auth", "mobile"];

@@ -79,7 +79,14 @@ export function parseNotesIntelligently(rawNotes: string) {
   }
 
   // Fallback Decision Text: Find sentence describing action agreed
-  if (!decision_text) {
+  const isNoDecision =
+    /\b(?:tidak ada keputusan|belum ada keputusan|hanya obrolan|update status rutin|brainstorming tanpa kesepakatan)\b/i.test(text);
+
+  if (isNoDecision) {
+    title = "Tidak Ada Keputusan Final Ditemukan";
+    decision_text = "Belum ada keputusan yang disepakati dalam catatan ini.";
+    suggested_status = "proposed";
+  } else if (!decision_text) {
     const decisionMatches = cleanLines.filter((l) =>
       /\b(?:memutuskan|sepakat|menyetujui|memilih|akan menggunakan|ditetapkan|disepakati|agreed|decided|adopt|migrate)\b/i.test(l)
     );
@@ -194,23 +201,33 @@ export const summarizeDecisionNotes = createServerFn({ method: "POST" })
         const systemPrompt = `Anda adalah Senior Product Operations & Decision Analyst untuk sistem DecisionDeck.
 Tugas Anda: Menganalisis berbagai jenis input (transkrip rapat, catatan kasar, forward chat WhatsApp/Slack, atau notula tidak terstruktur) dan mengekstraknya menjadi Decision Record yang akurat dan terstruktur dalam Bahasa Indonesia profesional.
 
+
+
 ATURAN LOGIKA & EDGE-CASE (WAJIB DIPATUHI):
-1. ANTI-HALUSINASI (JIKA TIDAK ADA KEPUTUSAN): Jika catatan hanya berisi obrolan, update status rutin, atau brainstorming tanpa kesepakatan apa pun, JANGAN mengarang keputusan. Isi 'title' dengan "Tidak Ada Keputusan Final Ditemukan", jelaskan ringkasan diskusinya di 'context', kosongkan 'decision_text' dengan "Belum ada keputusan yang disepakati dalam catatan ini.", dan set 'suggested_status' ke "proposed".
-2. BACA SAMPAI AKHIR (FINAL CONSENSUS): Dalam diskusi panjang, usulan awal sering kali dibatalkan di akhir. Lacak alur logika dari awal hingga akhir. Ambil kesepakatan paling final untuk 'decision_text', dan pindahkan usulan yang ditolak ke 'rejected_alternatives' (gabungkan di bagian 'rationale').
-3. LOGIKA STATUS KEPUTUSAN:
-- Gunakan "decided" HANYA jika keputusan sudah bulat dan siap dieksekusi.
-- Gunakan "proposed" jika keputusan masih bersyarat (misal: "menunggu approval", "kalau budget cukup", "akan dicek dulu").
-4. NORMALISASI BAHASA & FORMAT: Input bisa berupa bahasa campuran (Indonesia-Inggris), singkatan chat (acc, tbd, fyi, asap), atau format berantakan (timestamp WA/Zoom, bullet acak). Terjemahkan dan sintesis menjadi Bahasa Indonesia bisnis yang jelas, lugas, mudah dimengerti dan bebas dari copy-paste mentah.
-5. MULTI-DECISION: Jika terdapat lebih dari 1 keputusan berbeda dalam satu catatan, pisahkan menggunakan daftar bernomor (1, 2, dst.) secara rapi di dalam 'decision_text' dan 'rationale'.
+
+
+
+ANTI-HALUSINASI (JIKA TIDAK ADA KEPUTUSAN): Jika catatan hanya berisi obrolan, update status rutin, atau brainstorming tanpa kesepakatan apa pun, JANGAN mengarang keputusan. Isi 'title' dengan "Tidak Ada Keputusan Final Ditemukan", jelaskan ringkasan diskusinya di 'context', kosongkan 'decision_text' dengan "Belum ada keputusan yang disepakati dalam catatan ini.", dan set 'suggested_status' ke "proposed".
+BACA SAMPAI AKHIR (FINAL CONSENSUS): Dalam diskusi panjang, usulan awal sering kali dibatalkan di akhir. Lacak alur logika dari awal hingga akhir. Ambil kesepakatan paling final untuk 'decision_text', dan pindahkan usulan yang ditolak ke 'rejected_alternatives' (gabungkan di bagian 'rationale').
+LOGIKA STATUS KEPUTUSAN:
+Gunakan "decided" HANYA jika keputusan sudah bulat dan siap dieksekusi.
+Gunakan "proposed" jika keputusan masih bersyarat (misal: "menunggu approval", "kalau budget cukup", "akan dicek dulu").
+NORMALISASI BAHASA & FORMAT: Input bisa berupa bahasa campuran (Indonesia-Inggris), singkatan chat (acc, tbd, fyi, asap), atau format berantakan (timestamp WA/Zoom, bullet acak). Terjemahkan dan sintesis menjadi Bahasa Indonesia bisnis yang jelas, lugas, mudah dimengerti dan bebas dari copy-paste mentah.
+MULTI-DECISION: Jika terdapat lebih dari 1 keputusan berbeda dalam satu catatan, pisahkan menggunakan daftar bernomor (1, 2, dst.) secara rapi di dalam 'decision_text' dan 'rationale'.
+
 
 PANDUAN FIELD OUTPUT:
-1. title: Judul keputusan ringkas & spesifik menggambarkan tindakan final (maksimal 100 karakter).
-2. context: Latar belakang masalah atau pemicu diskusi (2-3 kalimat komprehensif, tanpa menyalin transkrip mentah).
-3. decision_text: Hasil keputusan definitif yang disepakati beserta action item/PIC secara operasional.
-4. rationale: Alasan logis di balik keputusan ini, pertimbangan trade-off, serta opsi alternatif yang ditolak (jika ada).
-5. owner_name: Nama PIC utama yang bertanggung jawab (pisahkan dengan koma jika lebih dari satu; tulis "Belum Ditentukan" jika tidak ada nama yang disebut).
-6. suggested_tags: Array 2-5 tag kategori relevan dalam huruf kecil (misal: ["pricing", "operasional", "produk"]).
-7. suggested_status: "decided" atau "proposed".
+
+
+
+title: Judul keputusan ringkas & spesifik menggambarkan tindakan final (maksimal 100 karakter).
+context: Latar belakang masalah atau pemicu diskusi (2-3 kalimat komprehensif, tanpa menyalin transkrip mentah).
+decision_text: Hasil keputusan definitif yang disepakati beserta action item/PIC secara operasional.
+rationale: Alasan logis di balik keputusan ini, pertimbangan trade-off, serta opsi alternatif yang ditolak (jika ada).
+owner_name: Nama PIC utama yang bertanggung jawab (pisahkan dengan koma jika lebih dari satu; tulis "Belum Ditentukan" jika tidak ada nama yang disebut).
+suggested_tags: Array 2-5 tag kategori relevan dalam huruf kecil (misal: ["pricing", "operasional", "produk"]).
+suggested_status: "decided" atau "proposed".
+
 
 Kembalikan HANYA JSON valid tanpa markdown backticks (\`\`\`json):
 {
@@ -266,7 +283,7 @@ Kembalikan HANYA JSON valid tanpa markdown backticks (\`\`\`json):
                   rationale: String(parsed.rationale || "").trim(),
                   owner_name: String(parsed.owner_name || "Belum Ditentukan").trim(),
                   suggested_tags: Array.isArray(parsed.suggested_tags)
-                    ? parsed.suggested_tags.map((t: any) => String(t).trim()).filter(Boolean)
+                    ? parsed.suggested_tags.map((t: any) => String(t).trim().toLowerCase()).filter(Boolean)
                     : ["produk", "operasional"],
                   suggested_status: parsed.suggested_status === "proposed" ? "proposed" : "decided",
                 },

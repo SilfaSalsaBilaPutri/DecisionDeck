@@ -87,7 +87,7 @@ function initialForm(): DecisionFormState {
     context: "",
     decision_text: "",
     rationale: "",
-    owner_name: "Silfa Salsabila Putri",
+    owner_name: "",
     decision_date: new Date().toISOString().slice(0, 10),
     status: "decided",
     tags: "",
