@@ -127,10 +127,10 @@ function NewDecisionPage() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser({ id: session.user.id, email: session.user.email ?? null });
-        if (!demoActive && session.user.user_metadata?.full_name) {
+        if (!demoActive && session.user.user_metadata?.["full_name"]) {
           setForm((prev) => ({
             ...prev,
-            owner_name: session.user.user_metadata.full_name,
+            owner_name: session.user.user_metadata["full_name"],
           }));
         }
       }

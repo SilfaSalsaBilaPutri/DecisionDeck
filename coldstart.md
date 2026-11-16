@@ -16,6 +16,7 @@ Auth baseline: Supabase Auth.
 ## Implementation decisions and change log
 
 - 7 November 2026: User approved continuing in Lovable. Use TanStack Start (the supported framework), TypeScript, Tailwind CSS v4, and Lovable Cloud / Supabase PostgreSQL. The DecisionDeck product scope remains Stage 1 MVP; optional Stage 2 stays deferred. No application code had been changed when this decision was recorded.
+- 16 November 2026: Enabled Lovable Cloud's Password HIBP Check so new and changed passwords are rejected when present in known breach lists. This applies to the app's email/password signup and platform-managed password changes; existing passwords are not retroactively checked.
 - Update this document whenever an implementation decision or product change is made; keep unfinished acceptance criteria explicitly unchecked.
 
 ## 1. Ide Produk
@@ -586,6 +587,7 @@ Do not add shared-workspace memberships, workspaces or embeddings preemptively.
 - [ ] AI failure retains notes and permits manual fallback.
 
 ### Security / quality
+- [x] Known-leaked password protection enabled in Lovable Cloud Auth.
 - [ ] User A cannot read/change User B records or attach B tags/links.
 - [ ] Composite ownership constraints and RLS tested with real authenticated contexts.
 - [ ] Transactions prevent partial saves.
