@@ -227,14 +227,14 @@ function parseNotesToDraft(rawNotes: string): Partial<DecisionForm> {
   }
 
   if (!title && lines.length > 0) {
-    title = lines[0].replace(/^[#\-*\d.]+\s*/, "").slice(0, 100);
+    title = (lines[0] ?? "").replace(/^[#\-*\d.]+\s*/, "").slice(0, 100);
   }
   if (!decision_text) {
     const decisionLine = lines.find((l) => /memutuskan|sepakat|setuju|akan menggunakan|dipilih|agreed|decided/i.test(l));
     if (decisionLine) {
       decision_text = decisionLine.replace(/^[#\-*\d.]+\s*/, "").trim();
     } else if (lines.length > 1) {
-      decision_text = lines[1];
+      decision_text = lines[1] ?? "";
     }
   }
   if (!context) {
