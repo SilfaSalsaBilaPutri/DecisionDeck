@@ -158,15 +158,16 @@ function NewDecisionPage() {
 
       if (response && response.success && response.data) {
         const { title, context, decision_text, rationale, owner_name, suggested_tags, suggested_status } = response.data;
+        const fallback = parseNotesIntelligently(trimmedNotes);
         setForm((prev) => ({
           ...prev,
-          title: title || prev.title,
-          context: context || prev.context,
-          decision_text: decision_text || prev.decision_text,
-          rationale: rationale || prev.rationale,
-          owner_name: owner_name || prev.owner_name,
-          status: suggested_status || "decided",
-          tags: suggested_tags && suggested_tags.length > 0 ? suggested_tags.join(", ") : prev.tags,
+          title: title || fallback.title || prev.title,
+          context: context || fallback.context || prev.context,
+          decision_text: decision_text || fallback.decision_text || prev.decision_text,
+          rationale: rationale || fallback.rationale || prev.rationale,
+          owner_name: owner_name || fallback.owner_name || prev.owner_name,
+          status: suggested_status || fallback.suggested_status || "decided",
+          tags: suggested_tags && suggested_tags.length > 0 ? suggested_tags.join(", ") : (fallback.suggested_tags.length > 0 ? fallback.suggested_tags.join(", ") : prev.tags),
           source_notes: trimmedNotes,
           creation_method: "ai_summarized",
         }));
@@ -377,8 +378,8 @@ function NewDecisionPage() {
                 setForm((prev) => ({ ...prev, creation_method: "ai_summarized" }));
               }}
               className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition-all sm:text-sm ${workflowMode === "ai"
-                  ? "bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-zinc-950 shadow-lg shadow-amber-500/20 font-bold"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]"
+                ? "bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-zinc-950 shadow-lg shadow-amber-500/20 font-bold"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]"
                 }`}
             >
               <Sparkles className={`size-4 ${workflowMode === "ai" ? "text-zinc-950" : "text-amber-400"}`} />
@@ -396,8 +397,8 @@ function NewDecisionPage() {
                 setForm((prev) => ({ ...prev, creation_method: "manual" }));
               }}
               className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition-all sm:text-sm ${workflowMode === "manual"
-                  ? "bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-zinc-950 shadow-lg shadow-amber-500/20 font-bold"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]"
+                ? "bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-zinc-950 shadow-lg shadow-amber-500/20 font-bold"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]"
                 }`}
             >
               <FileText className={`size-4 ${workflowMode === "manual" ? "text-zinc-950" : "text-zinc-400"}`} />
