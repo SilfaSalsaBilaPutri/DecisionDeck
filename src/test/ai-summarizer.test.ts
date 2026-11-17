@@ -1,7 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
-import { summarizeWithGemini } from "@/lib/decisions.functions";
+import { getGeminiApiKey, summarizeWithGemini } from "@/lib/decisions.functions";
 
-describe("Google Gemini AI Decision Summarizer (Server Action)", () => {
+describe("Google Gemini API Key Retriever & Server Action", () => {
+  it("safely retrieves key from process.env.GEMINI_API_KEY", () => {
+    process.env.GEMINI_API_KEY = "key-from-gemini-env";
+    expect(getGeminiApiKey()).toBe("key-from-gemini-env");
+    delete process.env.GEMINI_API_KEY;
+  });
+
+  it("safely retrieves key from process.env.VITE_GEMINI_API_KEY as fallback", () => {
+    delete process.env.GEMINI_API_KEY;
+    process.env.VITE_GEMINI_API_KEY = "key-from-vite-env";
+    expect(getGeminiApiKey()).toBe("key-from-vite-env");
+    delete process.env.VITE_GEMINI_API_KEY;
+  });
+
   it("rejects empty rawNotes with a clear error message", async () => {
     const result = await summarizeWithGemini("   ");
     expect(result.success).toBe(false);
@@ -19,21 +32,24 @@ describe("Google Gemini AI Decision Summarizer (Server Action)", () => {
     const originalEnv = process.env.GEMINI_API_KEY;
     const originalGoogle = process.env.GOOGLE_API_KEY;
     const originalVite = process.env.VITE_GEMINI_API_KEY;
+    const originalViteGoogle = process.env.VITE_GOOGLE_API_KEY;
 
     delete process.env.GEMINI_API_KEY;
     delete process.env.GOOGLE_API_KEY;
     delete process.env.VITE_GEMINI_API_KEY;
+    delete process.env.VITE_GOOGLE_API_KEY;
 
     try {
       const result = await summarizeWithGemini("Notula rapat: Kita sepakat migrasi database ke Postgres.");
 
       expect(result.success).toBe(false);
       expect(result.data).toBeUndefined();
-      expect(result.error).toContain("GEMINI_API_KEY tidak ditemukan di environment (.env)");
+      expect(result.error).toContain("GEMINI_API_KEY tidak ditemukan di environment server");
     } finally {
       if (originalEnv) process.env.GEMINI_API_KEY = originalEnv;
       if (originalGoogle) process.env.GOOGLE_API_KEY = originalGoogle;
       if (originalVite) process.env.VITE_GEMINI_API_KEY = originalVite;
+      if (originalViteGoogle) process.env.VITE_GOOGLE_API_KEY = originalViteGoogle;
     }
   });
 
