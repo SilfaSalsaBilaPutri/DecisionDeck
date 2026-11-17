@@ -30,7 +30,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  parseNotesIntelligently,
   saveDecision,
   summarizeDecisionNotes,
   type DecisionLinkInput,
@@ -158,56 +157,31 @@ function NewDecisionPage() {
 
       if (response && response.success && response.data) {
         const { title, context, decision_text, rationale, owner_name, suggested_tags, suggested_status } = response.data;
-        const fallback = parseNotesIntelligently(trimmedNotes);
         setForm((prev) => ({
           ...prev,
-          title: title || fallback.title || prev.title,
-          context: context || fallback.context || prev.context,
-          decision_text: decision_text || fallback.decision_text || prev.decision_text,
-          rationale: rationale || fallback.rationale || prev.rationale,
-          owner_name: owner_name || fallback.owner_name || prev.owner_name,
-          status: suggested_status || fallback.suggested_status || "decided",
-          tags: suggested_tags && suggested_tags.length > 0 ? suggested_tags.join(", ") : (fallback.suggested_tags.length > 0 ? fallback.suggested_tags.join(", ") : prev.tags),
+          title: title || prev.title,
+          context: context || prev.context,
+          decision_text: decision_text || prev.decision_text,
+          rationale: rationale || prev.rationale,
+          owner_name: owner_name || prev.owner_name,
+          status: suggested_status || "decided",
+          tags: suggested_tags && suggested_tags.length > 0 ? suggested_tags.join(", ") : prev.tags,
           source_notes: trimmedNotes,
           creation_method: "ai_summarized",
         }));
-        setAiSource(response.source ?? "gemini");
+        setAiSource("gemini");
         setAiDraftReady(true);
       } else {
-        // Fallback to local intelligent semantic extractor
-        const fallback = parseNotesIntelligently(trimmedNotes);
-        setForm((prev) => ({
-          ...prev,
-          title: fallback.title,
-          context: fallback.context,
-          decision_text: fallback.decision_text,
-          rationale: fallback.rationale,
-          owner_name: fallback.owner_name,
-          status: fallback.suggested_status,
-          tags: fallback.suggested_tags.join(", "),
-          source_notes: trimmedNotes,
-          creation_method: "ai_summarized",
-        }));
-        setAiSource("heuristic_fallback");
-        setAiDraftReady(true);
+        setErrorMessage(
+          response?.error ||
+            "Gagal menghubungkan ke Google Gemini API. Pastikan GEMINI_API_KEY telah dikonfigurasi di file .env."
+        );
       }
-    } catch (err) {
-      console.warn("AI summarizer server call failed, applying client heuristic parser:", err);
-      const fallback = parseNotesIntelligently(trimmedNotes);
-      setForm((prev) => ({
-        ...prev,
-        title: fallback.title,
-        context: fallback.context,
-        decision_text: fallback.decision_text,
-        rationale: fallback.rationale,
-        owner_name: fallback.owner_name,
-        status: fallback.suggested_status,
-        tags: fallback.suggested_tags.join(", "),
-        source_notes: trimmedNotes,
-        creation_method: "ai_summarized",
-      }));
-      setAiSource("heuristic_fallback");
-      setAiDraftReady(true);
+    } catch (err: any) {
+      setErrorMessage(
+        err?.message ||
+          "Gagal memproses catatan dengan Gemini API. Periksa koneksi internet dan pastikan GEMINI_API_KEY valid."
+      );
     } finally {
       setAiGenerating(false);
     }
@@ -506,9 +480,7 @@ function NewDecisionPage() {
                         Draf Berhasil Diekstrak oleh AI
                       </h3>
                       <p className="mt-0.5 text-xs text-zinc-300">
-                        {aiSource === "gemini"
-                          ? "Model Google Gemini telah mengekstrak struktur keputusan. Silakan tinjau dan edit kolom di bawah sebelum disimpan."
-                          : "Catatan berhasil diparsing secara cerdas. Silakan tinjau dan lengkapi detail jika diperlukan."}
+                        Model Google Gemini (gemini-2.5-flash) telah mengekstrak struktur keputusan. Silakan tinjau dan edit kolom di bawah sebelum disimpan.
                       </p>
                     </div>
                   </div>

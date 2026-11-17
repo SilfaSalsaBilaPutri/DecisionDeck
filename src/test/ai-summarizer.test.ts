@@ -1,62 +1,95 @@
-import { describe, expect, it } from "vitest";
-import { parseNotesIntelligently } from "@/lib/decisions.functions";
+import { describe, expect, it, vi } from "vitest";
+import { summarizeWithGemini } from "@/lib/decisions.functions";
 
-describe("AI & Heuristic Decision Summarizer", () => {
-  it("never produces an empty decision_text or title for realistic input", () => {
-    const rawNotes = `Diskusi tim backend:
-Kapasitas memori server hampir penuh.
-Kita memutuskan untuk mengaktifkan distributed cache di redis.
-PIC: Budi Santoso
-Alasan: Mengurangi beban CPU dan query database.`;
-
-    const result = parseNotesIntelligently(rawNotes);
-    expect(result.title).toBeTruthy();
-    expect(result.decision_text).toBeTruthy();
-    expect(result.context).toBeTruthy();
-    expect(result.rationale).toBeTruthy();
-    expect(result.owner_name).toBe("Budi Santoso");
-    expect(result.suggested_status).toBe("decided");
-    expect(result.decision_text.length).toBeGreaterThan(30);
+describe("Google Gemini AI Decision Summarizer (Server Action)", () => {
+  it("rejects empty rawNotes with a clear error message", async () => {
+    const result = await summarizeWithGemini("   ");
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("tidak boleh kosong");
   });
 
-  it("handles anti-halusinasi when notes contain only status updates or brainstorming without decisions", () => {
-    const rawNotes = `Update status tim pagi ini:
-- Budi sedang ngerjain bug fix form
-- Ani mereview PR styling
-- Diskusi santai tanpa kesepakatan dan belum ada keputusan baru`;
-
-    const result = parseNotesIntelligently(rawNotes);
-    expect(result.title).toBe("Tidak Ada Keputusan Final Ditemukan");
-    expect(result.decision_text).toBe("Belum ada keputusan yang disepakati dalam catatan ini.");
-    expect(result.suggested_status).toBe("proposed");
+  it("rejects rawNotes exceeding 10,000 characters", async () => {
+    const hugeNotes = "A".repeat(10001);
+    const result = await summarizeWithGemini(hugeNotes);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("maksimal 10.000 karakter");
   });
 
-  it("cleans WhatsApp/Slack chat timestamps and speaker prefixes, formatting multi-decision notes", () => {
-    const rawNotes = `[10.15] Budi: gaes gimana soal stack backend?
-[10.17] Ani: kita sepakat migrasi ke Supabase Auth
-[10.20] Budi: oke dan kita sepakat pakai Tailwind CSS untuk styling
-[10.21] PIC: Ani Wijaya`;
+  it("returns a transparent error when GEMINI_API_KEY is missing without returning any mock data", async () => {
+    const originalEnv = process.env.GEMINI_API_KEY;
+    const originalGoogle = process.env.GOOGLE_API_KEY;
+    const originalVite = process.env.VITE_GEMINI_API_KEY;
 
-    const result = parseNotesIntelligently(rawNotes);
-    expect(result.decision_text).not.toContain("[10.17]");
-    expect(result.decision_text).not.toContain("Ani:");
-    expect(result.owner_name).toBe("Ani Wijaya");
-    expect(result.decision_text).toContain("1.");
-    expect(result.decision_text).toContain("2.");
-    expect(result.suggested_tags).toContain("keamanan");
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.GOOGLE_API_KEY;
+    delete process.env.VITE_GEMINI_API_KEY;
+
+    try {
+      const result = await summarizeWithGemini("Notula rapat: Kita sepakat migrasi database ke Postgres.");
+
+      expect(result.success).toBe(false);
+      expect(result.data).toBeUndefined();
+      expect(result.error).toContain("GEMINI_API_KEY tidak ditemukan di environment (.env)");
+    } finally {
+      if (originalEnv) process.env.GEMINI_API_KEY = originalEnv;
+      if (originalGoogle) process.env.GOOGLE_API_KEY = originalGoogle;
+      if (originalVite) process.env.VITE_GEMINI_API_KEY = originalVite;
+    }
   });
 
-  it("synthesizes complete, operational decisions instead of raw 1-word fragments", () => {
-    const rawNotes = `Topik: Pemilihan Database
-Konteks: Butuh database relasional untuk multi-tenant.
-Keputusan: Postgres
-Alasan: Dukungan RLS native dan ACID compliance.`;
+  it("calls Google Gemini API with gemini-2.5-flash and parses valid JSON responses accurately", async () => {
+    process.env.GEMINI_API_KEY = "test-mock-gemini-key";
 
-    const result = parseNotesIntelligently(rawNotes);
-    expect(result.decision_text).toBeTruthy();
-    expect(result.decision_text).toContain("Postgres");
-    // Ensure it's not just "Postgres" by itself, but formulated into an operational decision statement
-    expect(result.decision_text.length).toBeGreaterThan(25);
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    title: "Migrasi Database ke PostgreSQL",
+                    context: "Database MySQL sebelumnya sering mengalami bottleneck performa pada beban kerja tinggi.",
+                    decision_text: "Menyetujui migrasi penuh database utama ke PostgreSQL dengan arsitektur multi-tenant.",
+                    rationale: "PostgreSQL menyediakan native RLS, integritas ACID tinggi, dan latensi query yang jauh lebih baik.",
+                    owner_name: "Silfa Salsabila Putri",
+                    suggested_tags: ["backend", "database", "arsitektur"],
+                    suggested_status: "decided",
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    });
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = mockFetch;
+
+    try {
+      const result = await summarizeWithGemini("Notula rapat arsitektur: sepakat migrasi ke PostgreSQL.");
+
+      expect(result.success).toBe(true);
+      expect(result.source).toBe("gemini");
+      expect(result.data?.title).toBe("Migrasi Database ke PostgreSQL");
+      expect(result.data?.owner_name).toBe("Silfa Salsabila Putri");
+      expect(result.data?.suggested_status).toBe("decided");
+      expect(result.data?.suggested_tags).toEqual(["backend", "database", "arsitektur"]);
+
+      // Verify request payload sent to Gemini API
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const callUrl = mockFetch.mock.calls[0][0];
+      const callOptions = mockFetch.mock.calls[0][1];
+      expect(callUrl).toContain("gemini-2.5-flash:generateContent?key=test-mock-gemini-key");
+
+      const parsedBody = JSON.parse(callOptions.body);
+      expect(parsedBody.generationConfig.temperature).toBe(0.1);
+      expect(parsedBody.generationConfig.responseMimeType).toBe("application/json");
+    } finally {
+      globalThis.fetch = originalFetch;
+      delete process.env.GEMINI_API_KEY;
+    }
   });
 });
-

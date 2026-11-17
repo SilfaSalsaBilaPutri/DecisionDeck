@@ -33,7 +33,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { filterDecisions, type DecisionFilters, type DecisionListItem, type DecisionStatus } from "@/lib/decision-search";
-import { deleteDecision, listDecisions, parseNotesIntelligently, saveDecision, summarizeDecisionNotes, type DecisionLinkInput } from "@/lib/decisions.functions";
+import { deleteDecision, listDecisions, saveDecision, summarizeDecisionNotes, type DecisionLinkInput } from "@/lib/decisions.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -199,22 +199,6 @@ function statusLabel(status: string) {
   return "Diusulkan";
 }
 
-function parseNotesToDraft(rawNotes: string): Partial<DecisionForm> {
-  const result = parseNotesIntelligently(rawNotes);
-  return {
-    title: result.title,
-    context: result.context,
-    decision_text: result.decision_text,
-    rationale: result.rationale,
-    owner_name: result.owner_name,
-    decision_date: localDate(),
-    status: result.suggested_status,
-    tags: result.suggested_tags.join(", "),
-    source_notes: rawNotes.trim(),
-    creation_method: "ai_summarized",
-  };
-}
-
 function DecisionDeckHome() {
   const queryClient = useQueryClient();
   const listDecisionsFn = useServerFn(listDecisions);
@@ -360,29 +344,19 @@ function DecisionDeckHome() {
           creation_method: "ai_summarized",
           links: current.links,
         }));
+        setAiMode(false);
+        setAiDraftBanner(true);
       } else {
-        const draft = parseNotesToDraft(trimmedNotes);
-        setForm((current) => ({
-          ...current,
-          ...draft,
-          source_notes: trimmedNotes,
-          creation_method: "ai_summarized",
-          links: current.links,
-        }));
+        setFormError(
+          response?.error ||
+            "Gagal menghubungkan ke Google Gemini API. Pastikan GEMINI_API_KEY telah dikonfigurasi di file .env."
+        );
       }
-      setAiMode(false);
-      setAiDraftBanner(true);
-    } catch {
-      const draft = parseNotesToDraft(trimmedNotes);
-      setForm((current) => ({
-        ...current,
-        ...draft,
-        source_notes: trimmedNotes,
-        creation_method: "ai_summarized",
-        links: current.links,
-      }));
-      setAiMode(false);
-      setAiDraftBanner(true);
+    } catch (err: any) {
+      setFormError(
+        err?.message ||
+          "Gagal memproses catatan dengan Gemini API. Periksa koneksi internet dan pastikan GEMINI_API_KEY valid."
+      );
     } finally {
       setAiGenerating(false);
     }
